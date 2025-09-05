@@ -185,7 +185,7 @@ const openAdd = (ev) => {
           <button @click="fetchProducts" class="mt-4 h-8 px-4 py-1.5 bg-primary text-white rounded-[6.75px] text-xs">Try Again</button>
         </div>
 
-        <div v-else class="grid grid-cols-4 gap-6">
+        <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <template v-if="filteredProducts.length > 0">
             <product-card
               v-for="product in filteredProducts"

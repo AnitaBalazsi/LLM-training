@@ -15,6 +15,8 @@ watch(() => props.visible, (val) => {
 
 const handleAdd = () => {
   if (!form.value.name.trim()) return
+  if (typeof form.value.price !== 'number' || form.value.price <= 0) return
+  if (typeof form.value.stock !== 'number' || form.value.stock < 0) return
   emit('add', { ...form.value })
   emit('close')
 }
