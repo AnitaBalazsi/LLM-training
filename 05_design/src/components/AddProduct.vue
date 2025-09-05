@@ -1,4 +1,5 @@
 <script setup>
+import DialogOverlay from './DialogOverlay.vue'
 import IconX from '../components/icons/IconX.vue'
 import { ref, watch } from 'vue'
 const emit = defineEmits(['close', 'add'])
@@ -20,6 +21,7 @@ const handleAdd = () => {
 </script>
 
 <template>
+  <dialog-overlay v-if="visible">
     <div class="fixed inset-0 bg-black/20 flex items-center justify-center">
       <div class="bg-card rounded-md max-w-md w-full p-6 mx-4">
         <div class="flex justify-between items-start">
@@ -87,4 +89,5 @@ const handleAdd = () => {
         </div>
       </div>
     </div>
+  </dialog-overlay>
 </template>

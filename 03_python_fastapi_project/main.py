@@ -93,6 +93,8 @@ async def delete_product(id: int, db: AsyncSession = Depends(get_db)):
     await db.delete(db_product)
     await db.commit()
 
+    return {"message": "Product deleted successfully"}
+
 @app.get("/products/{id}", response_model=ProductDTO)
 async def get_product(id: int, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(Product).filter(Product.id == id))

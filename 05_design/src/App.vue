@@ -73,7 +73,6 @@ const onAddProduct = async (payload) => {
     showAdd.value = false
   } else {
     showNotification(result.error, 'error')
-    showAdd.value = true
   }
 }
 

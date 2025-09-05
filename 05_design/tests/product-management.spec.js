@@ -64,7 +64,7 @@ test.describe("Product Management Page", () => {
 
   test("should display loading spinner initially", async ({ page }) => {
     await page.route("**/products", async (route) => {
-      await new Promise((res) => setTimeout(res, 1000));
+      await new Promise((res) => setTimeout(res, 150));
       route.fulfill({
         status: 200,
         contentType: "application/json",
