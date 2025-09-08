@@ -1,5 +1,5 @@
 <template>
-  <div class="fixed bottom-6 right-6 z-40">
+  <div class="fixed bottom-6 left-6 z-40">
     <!-- Always visible cart panel -->
     <div class="bg-white rounded-lg shadow-xl border border-border w-96 max-h-96 overflow-hidden">
       <!-- Cart header -->

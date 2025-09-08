@@ -24,14 +24,67 @@ const sessionId = ref('')
 
 const API_URL = 'http://localhost:8000'
 
-// Generate or get session ID from localStorage
+// Session configuration
+const SESSION_EXPIRY_HOURS = 24 // 24 hours session expiry
+const SESSION_PREFIX = 'cart_'
+
+// Validate session ID format (UUID v4 pattern)
+const isValidSessionId = (sessionId) => {
+  if (!sessionId || typeof sessionId !== 'string') return false
+  
+  // Check if it has the correct prefix
+  if (!sessionId.startsWith(SESSION_PREFIX)) return false
+  
+  // Extract UUID part and validate format
+  const uuidPart = sessionId.substring(SESSION_PREFIX.length)
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+  return uuidRegex.test(uuidPart)
+}
+
+// Check if session has expired
+const isSessionExpired = (timestamp) => {
+  if (!timestamp) return true
+  const now = Date.now()
+  const expiryTime = timestamp + (SESSION_EXPIRY_HOURS * 60 * 60 * 1000)
+  return now > expiryTime
+}
+
+// Generate or get session ID from localStorage with validation and expiration
 const initializeSession = () => {
   let storedSessionId = localStorage.getItem('cart_session_id')
-  if (!storedSessionId) {
-    storedSessionId = 'cart_' + crypto.randomUUID()
-    localStorage.setItem('cart_session_id', storedSessionId)
+  let sessionTimestamp = localStorage.getItem('cart_session_timestamp')
+  
+  // Parse timestamp
+  const timestamp = sessionTimestamp ? parseInt(sessionTimestamp, 10) : null
+  
+  // Validate existing session
+  if (storedSessionId && 
+      isValidSessionId(storedSessionId) && 
+      !isSessionExpired(timestamp)) {
+    sessionId.value = storedSessionId
+    return
   }
-  sessionId.value = storedSessionId
+  
+  // Generate new session if validation fails or session expired
+  const newSessionId = SESSION_PREFIX + crypto.randomUUID()
+  const newTimestamp = Date.now().toString()
+  
+  localStorage.setItem('cart_session_id', newSessionId)
+  localStorage.setItem('cart_session_timestamp', newTimestamp)
+  sessionId.value = newSessionId
+  
+  // Clear any existing cart data if session was invalid/expired
+  if (storedSessionId) {
+    showNotification('Session expired - cart cleared for security', 'info')
+  }
+}
+
+// Refresh session timestamp on user activity
+const refreshSession = () => {
+  if (sessionId.value && isValidSessionId(sessionId.value)) {
+    const newTimestamp = Date.now().toString()
+    localStorage.setItem('cart_session_timestamp', newTimestamp)
+  }
 }
 
 const showNotification = (message, type = 'success') => {
@@ -162,6 +215,8 @@ const loadCart = async () => {
 
 // Cart functionality
 const addToCart = async (product) => {
+  refreshSession() // Refresh session on user activity
+  
   const existingItem = cartItems.value.find(item => item.id === product.id)
   
   if (existingItem) {
@@ -264,6 +319,8 @@ const cartValidation = computed(() => {
 })
 
 const increaseQuantity = async (productId) => {
+  refreshSession() // Refresh session on user activity
+  
   const item = cartItems.value.find(item => item.id === productId)
   const currentStock = getProductStock(productId)
   
@@ -293,6 +350,8 @@ const increaseQuantity = async (productId) => {
 }
 
 const decreaseQuantity = async (productId) => {
+  refreshSession() // Refresh session on user activity
+  
   const item = cartItems.value.find(item => item.id === productId)
   if (item) {
     if (item.quantity > 1) {
@@ -320,6 +379,8 @@ const decreaseQuantity = async (productId) => {
 }
 
 const removeFromCart = async (productId) => {
+  refreshSession() // Refresh session on user activity
+  
   const index = cartItems.value.findIndex(item => item.id === productId)
   if (index !== -1) {
     const item = cartItems.value[index]
@@ -343,6 +404,8 @@ const removeFromCart = async (productId) => {
 
 // Checkout functionality
 const checkout = async () => {
+  refreshSession() // Refresh session on user activity
+  
   if (!cartValidation.value.canCheckout) {
     showNotification('Cannot checkout - please resolve stock issues first', 'error')
     return

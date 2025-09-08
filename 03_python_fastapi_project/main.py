@@ -1,5 +1,6 @@
 from contextlib import asynccontextmanager
 from typing import List
+import logging
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -10,6 +11,10 @@ from sqlalchemy.orm import selectinload
 
 from config import settings
 from database import Product, Cart, CartItem, create_tables, get_db
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 class ProductDTO(BaseModel):
     id: int
@@ -101,19 +106,26 @@ async def get_products(db: AsyncSession = Depends(get_db)):
 
 @app.put("/products/{id}", response_model=ProductDTO)
 async def update_product(id: int, product: ProductUpdateDTO, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Product).where(Product.id == id))
-    db_product = result.scalar_one_or_none()
+    try:
+        result = await db.execute(select(Product).where(Product.id == id))
+        db_product = result.scalar_one_or_none()
 
-    if db_product is None:
-        raise HTTPException(status_code=404, detail="Product not found!")
-    
-    update_data = product.model_dump(exclude_unset=True)
-    for field, value in update_data.items():
-        setattr(db_product, field, value)
-    
-    await db.commit()
-    await db.refresh(db_product)
-    return db_product
+        if db_product is None:
+            raise HTTPException(status_code=404, detail="Product not found!")
+        
+        update_data = product.model_dump(exclude_unset=True)
+        for field, value in update_data.items():
+            setattr(db_product, field, value)
+        
+        await db.commit()
+        await db.refresh(db_product)
+        return db_product
+    except HTTPException:
+        raise  # Re-raise HTTP exceptions as-is
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Failed to update product {id}: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to update product")
 
 @app.delete("/products/{id}")
 async def delete_product(id: int, db: AsyncSession = Depends(get_db)):
@@ -123,7 +135,7 @@ async def delete_product(id: int, db: AsyncSession = Depends(get_db)):
     if db_product is None:
         raise HTTPException(status_code=404, detail="Product not found!")
     
-    await db.execute(delete(Product).where(Product.id == id))
+    await db.delete(db_product)
     await db.commit()
 
     return {"message": "Product deleted successfully"}
@@ -201,7 +213,10 @@ async def checkout_cart(session_id: str, db: AsyncSession = Depends(get_db)):
         
     except Exception as e:
         await db.rollback()
-        raise HTTPException(status_code=500, detail=f"Checkout failed: {str(e)}")
+        # Log the specific error for debugging
+        logger.error(f"Checkout failed for session {session_id}: {str(e)}")
+        # Return generic error message to client
+        raise HTTPException(status_code=500, detail="Checkout processing failed. Please try again.")
 
 
 @app.get("/cart/{session_id}", response_model=CartDTO)
@@ -308,7 +323,7 @@ async def update_cart_item(session_id: str, product_id: int, update: CartItemUpd
         raise HTTPException(status_code=404, detail="Item not found in cart!")
     
     if update.quantity <= 0:
-        await db.execute(delete(CartItem).where(CartItem.id == cart_item.id))
+        await db.delete(cart_item)
     else:
         cart_item.quantity = update.quantity
     
