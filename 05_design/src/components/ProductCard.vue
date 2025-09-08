@@ -1,6 +1,15 @@
 <template>
-  <div class="bg-card border border-border rounded-[12.75px] w-[264.25px] h-[234.75px] p-4 flex flex-col shadow-card">
-    <h4 class="text-primary text-[13.2px] font-normal leading-[1.0606060759em]">{{ product.name }}</h4>
+  <div class="bg-card border border-border rounded-[12.75px] w-[264.25px] h-[234.75px] p-4 flex flex-col shadow-card relative">
+    <!-- Add to cart button in top-right corner -->
+    <button 
+      @click="$emit('addToCart', product)" 
+      class="absolute top-2 right-2 flex items-center justify-center w-8 h-8 bg-black rounded-[6.75px] hover:bg-gray-800 transition-colors"
+      title="Add to cart"
+    >
+      <icon-cart class="w-4 h-4 text-white" />
+    </button>
+    
+    <h4 class="text-primary text-[13.2px] font-normal leading-[1.0606060759em] pr-10">{{ product.name }}</h4>
     <div class="mt-[13.25px] flex-1">
       <p class="text-muted text-[11.3px] leading-[1.548672540em]">{{ product.description }}</p>
     </div>
@@ -37,6 +46,7 @@
 import IconEye from './icons/IconEye.vue'
 import IconEdit from './icons/IconEdit.vue'
 import IconTrash from './icons/IconTrash.vue'
+import IconCart from './icons/IconCart.vue'
 
 defineProps({
   product: {
@@ -45,5 +55,5 @@ defineProps({
   }
 })
 
-defineEmits(['view', 'edit', 'delete'])
+defineEmits(['view', 'edit', 'delete', 'addToCart'])
 </script>
