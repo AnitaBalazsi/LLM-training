@@ -5,6 +5,7 @@ import ProductDetails from './components/ProductDetails.vue'
 import ProductEdit from './components/ProductEdit.vue'
 import ProductDelete from './components/ProductDelete.vue'
 import AddProduct from './components/AddProduct.vue'
+import CartWidget from './components/CartWidget.vue'
 import IconSearch from './components/icons/IconSearch.vue'
 import IconPlus from './components/icons/IconPlus.vue'
 
@@ -18,8 +19,20 @@ const showAdd = ref(false)
 const isLoading = ref(false)
 const error = ref(null)
 const notification = ref({ show: false, message: '', type: 'success' })
+const cartItems = ref([])
+const sessionId = ref('')
 
 const API_URL = 'http://localhost:8000'
+
+// Generate or get session ID from localStorage
+const initializeSession = () => {
+  let storedSessionId = localStorage.getItem('cart_session_id')
+  if (!storedSessionId) {
+    storedSessionId = 'cart_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now()
+    localStorage.setItem('cart_session_id', storedSessionId)
+  }
+  sessionId.value = storedSessionId
+}
 
 const showNotification = (message, type = 'success') => {
   notification.value = { show: true, message, type }
@@ -87,7 +100,11 @@ const updateProduct = async (product) => {
     if (!res.ok) throw new Error('Failed to update product')
     const updated = await res.json()
     const idx = products.value.findIndex(p => p.id === updated.id)
-    if (idx !== -1) products.value[idx] = updated
+    if (idx !== -1) {
+      products.value[idx] = updated
+      // Update cart item price if it exists
+      updateCartItemPrice(updated.id, updated.price)
+    }
     showNotification('Product updated', 'success')
   } catch (e) {
     showNotification(e.message || 'Failed to update product', 'error')
@@ -119,7 +136,249 @@ const filteredProducts = computed(() => {
   )
 })
 
-onMounted(fetchProducts)
+onMounted(() => {
+  initializeSession()
+  fetchProducts()
+  loadCart()
+})
+
+// Load cart from backend
+const loadCart = async () => {
+  try {
+    const res = await fetch(`${API_URL}/cart/${sessionId.value}`)
+    if (res.ok) {
+      const cartData = await res.json()
+      cartItems.value = cartData.items.map(item => ({
+        id: item.product.id,
+        name: item.product.name,
+        price: item.product.price, // Use current price from product
+        quantity: item.quantity
+      }))
+    }
+  } catch (e) {
+    console.error('Failed to load cart:', e)
+  }
+}
+
+// Cart functionality
+const addToCart = async (product) => {
+  const existingItem = cartItems.value.find(item => item.id === product.id)
+  
+  if (existingItem) {
+    // Check if we can add one more item
+    if (existingItem.quantity < product.stock) {
+      try {
+        const res = await fetch(`${API_URL}/cart/${sessionId.value}/items`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            product_id: product.id,
+            quantity: 1
+          })
+        })
+        
+        if (res.ok) {
+          existingItem.quantity += 1
+          existingItem.price = product.price
+          showNotification(`${product.name} added to cart`, 'success')
+        } else {
+          throw new Error('Failed to add to cart')
+        }
+      } catch (e) {
+        showNotification('Failed to add item to cart', 'error')
+      }
+    } else {
+      showNotification(`Cannot add more ${product.name} - insufficient stock`, 'error')
+    }
+  } else {
+    // Check if product has stock
+    if (product.stock > 0) {
+      try {
+        const res = await fetch(`${API_URL}/cart/${sessionId.value}/items`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            product_id: product.id,
+            quantity: 1
+          })
+        })
+        
+        if (res.ok) {
+          cartItems.value.push({
+            id: product.id,
+            name: product.name,
+            price: product.price,
+            quantity: 1
+          })
+          showNotification(`${product.name} added to cart`, 'success')
+        } else {
+          throw new Error('Failed to add to cart')
+        }
+      } catch (e) {
+        showNotification('Failed to add item to cart', 'error')
+      }
+    } else {
+      showNotification(`${product.name} is out of stock`, 'error')
+    }
+  }
+}
+
+// Update cart item price when product is updated
+const updateCartItemPrice = (productId, newPrice) => {
+  const cartItem = cartItems.value.find(item => item.id === productId)
+  if (cartItem) {
+    cartItem.price = newPrice
+    showNotification('Cart updated with new price', 'info')
+  }
+}
+
+// Get current product stock for cart validation
+const getProductStock = (productId) => {
+  const product = products.value.find(p => p.id === productId)
+  return product ? product.stock : 0
+}
+
+// Validate cart items against current stock
+const cartValidation = computed(() => {
+  const errors = []
+  let hasStockErrors = false
+  
+  cartItems.value.forEach(item => {
+    const currentStock = getProductStock(item.id)
+    if (item.quantity > currentStock) {
+      errors.push({
+        productId: item.id,
+        productName: item.name,
+        requested: item.quantity,
+        available: currentStock
+      })
+      hasStockErrors = true
+    }
+  })
+  
+  return {
+    hasErrors: hasStockErrors,
+    errors: errors,
+    canCheckout: !hasStockErrors && cartItems.value.length > 0
+  }
+})
+
+const increaseQuantity = async (productId) => {
+  const item = cartItems.value.find(item => item.id === productId)
+  const currentStock = getProductStock(productId)
+  
+  if (item) {
+    if (item.quantity < currentStock) {
+      try {
+        const res = await fetch(`${API_URL}/cart/${sessionId.value}/items/${productId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            quantity: item.quantity + 1
+          })
+        })
+        
+        if (res.ok) {
+          item.quantity += 1
+        } else {
+          throw new Error('Failed to update cart')
+        }
+      } catch (e) {
+        showNotification('Failed to update cart', 'error')
+      }
+    } else {
+      showNotification('Not enough stock available', 'error')
+    }
+  }
+}
+
+const decreaseQuantity = async (productId) => {
+  const item = cartItems.value.find(item => item.id === productId)
+  if (item) {
+    if (item.quantity > 1) {
+      try {
+        const res = await fetch(`${API_URL}/cart/${sessionId.value}/items/${productId}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            quantity: item.quantity - 1
+          })
+        })
+        
+        if (res.ok) {
+          item.quantity -= 1
+        } else {
+          throw new Error('Failed to update cart')
+        }
+      } catch (e) {
+        showNotification('Failed to update cart', 'error')
+      }
+    } else {
+      removeFromCart(productId)
+    }
+  }
+}
+
+const removeFromCart = async (productId) => {
+  const index = cartItems.value.findIndex(item => item.id === productId)
+  if (index !== -1) {
+    const item = cartItems.value[index]
+    
+    try {
+      const res = await fetch(`${API_URL}/cart/${sessionId.value}/items/${productId}`, {
+        method: 'DELETE'
+      })
+      
+      if (res.ok) {
+        cartItems.value.splice(index, 1)
+        showNotification(`${item.name} removed from cart`, 'success')
+      } else {
+        throw new Error('Failed to remove from cart')
+      }
+    } catch (e) {
+      showNotification('Failed to remove item from cart', 'error')
+    }
+  }
+}
+
+// Checkout functionality
+const checkout = async () => {
+  if (!cartValidation.value.canCheckout) {
+    showNotification('Cannot checkout - please resolve stock issues first', 'error')
+    return
+  }
+  
+  isLoading.value = true
+  try {
+    const res = await fetch(`${API_URL}/cart/${sessionId.value}/checkout`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    })
+    
+    const result = await res.json()
+    
+    if (res.ok && result.success) {
+      // Clear local cart
+      cartItems.value = []
+      
+      // Refresh products to show updated stock
+      await fetchProducts()
+      
+      showNotification(
+        `Checkout successful! Total: $${result.checkout_details.total_amount.toFixed(2)} for ${result.checkout_details.items_processed} items`,
+        'success'
+      )
+    } else {
+      // Show error messages
+      const errorMessage = result.errors?.join(', ') || result.message || 'Checkout failed'
+      showNotification(errorMessage, 'error')
+    }
+  } catch (e) {
+    showNotification('Checkout failed - please try again', 'error')
+  } finally {
+    isLoading.value = false
+  }
+}
 
 const openAdd = (ev) => {
   ev?.preventDefault?.()
@@ -141,7 +400,8 @@ const openAdd = (ev) => {
       <div v-if="notification.show" class="fixed top-4 right-4 z-50">
         <div :class="{
             'bg-green-50 text-green-800': notification.type === 'success',
-            'bg-red-50 text-red-800': notification.type === 'error'
+            'bg-red-50 text-red-800': notification.type === 'error',
+            'bg-blue-50 text-blue-800': notification.type === 'info'
           }" class="rounded-lg p-4 shadow-md">
           <p class="text-sm font-medium">{{ notification.message }}</p>
         </div>
@@ -194,6 +454,7 @@ const openAdd = (ev) => {
               @view="(p) => { selectedProduct = p; showDetails = true }"
               @edit="(p) => { selectedProduct = p; showEdit = true }"
               @delete="(p) => { selectedProduct = p; showDelete = true }"
+              @addToCart="addToCart"
             />
           </template>
           <div v-else class="col-span-full min-h-[320px] flex items-center justify-center">
@@ -231,6 +492,17 @@ const openAdd = (ev) => {
       :visible="showAdd"
       @close="showAdd = false"
       @add="onAddProduct"
+    />
+
+    <!-- Cart Widget -->
+    <cart-widget
+      :cart-items="cartItems"
+      :cart-validation="cartValidation"
+      :is-loading="isLoading"
+      @increase-quantity="increaseQuantity"
+      @decrease-quantity="decreaseQuantity"
+      @remove-from-cart="removeFromCart"
+      @checkout="checkout"
     />
   </main>
 </template>
