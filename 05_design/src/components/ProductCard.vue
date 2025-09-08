@@ -3,7 +3,7 @@
     <!-- Add to cart button in top-right corner -->
     <button 
       @click="$emit('addToCart', product)" 
-      class="absolute top-2 right-2 flex items-center justify-center w-8 h-8 bg-black rounded-full hover:bg-gray-800 transition-colors"
+      class="absolute top-2 right-2 flex items-center justify-center w-8 h-8 bg-black rounded-[6.75px] hover:bg-gray-800 transition-colors"
       title="Add to cart"
     >
       <icon-cart class="w-4 h-4 text-white" />
