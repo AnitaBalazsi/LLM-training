@@ -1,6 +1,5 @@
 from contextlib import asynccontextmanager
 from typing import List
-import uuid
 
 from fastapi import Depends, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -124,7 +123,7 @@ async def delete_product(id: int, db: AsyncSession = Depends(get_db)):
     if db_product is None:
         raise HTTPException(status_code=404, detail="Product not found!")
     
-    await db.delete(db_product)
+    await db.execute(delete(Product).where(Product.id == id))
     await db.commit()
 
     return {"message": "Product deleted successfully"}
@@ -309,7 +308,7 @@ async def update_cart_item(session_id: str, product_id: int, update: CartItemUpd
         raise HTTPException(status_code=404, detail="Item not found in cart!")
     
     if update.quantity <= 0:
-        await db.delete(cart_item)
+        await db.execute(delete(CartItem).where(CartItem.id == cart_item.id))
     else:
         cart_item.quantity = update.quantity
     

@@ -28,7 +28,7 @@ const API_URL = 'http://localhost:8000'
 const initializeSession = () => {
   let storedSessionId = localStorage.getItem('cart_session_id')
   if (!storedSessionId) {
-    storedSessionId = 'cart_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now()
+    storedSessionId = 'cart_' + crypto.randomUUID()
     localStorage.setItem('cart_session_id', storedSessionId)
   }
   sessionId.value = storedSessionId
